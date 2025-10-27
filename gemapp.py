@@ -88,7 +88,7 @@ if prompt := st.chat_input("Ask a question about your documents..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.chat_message("user").write(prompt)
 
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2, streaming=True)
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0, streaming=True)
     
     retriever_tool = Tool(
         name="document_retriever",
