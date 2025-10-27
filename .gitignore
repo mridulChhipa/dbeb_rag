@@ -1,2 +1,5 @@
 *.pdf
 .ipynb_checkpoints/
+.ipynb
+.sqlite
+.db
