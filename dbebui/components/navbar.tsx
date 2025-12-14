@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+import { Settings } from "lucide-react";
 
 interface NavbarProps {
   children?: ReactNode;
@@ -21,6 +23,12 @@ export function Navbar({ children, badge }: NavbarProps) {
       </div>
       <nav className="flex items-center gap-4">
         {children}
+        <Button asChild variant="ghost" size="icon" title="Admin">
+          <Link href="/admin">
+            <Settings className="h-5 w-5" />
+            <span className="sr-only">Admin</span>
+          </Link>
+        </Button>
         <ThemeToggle />
       </nav>
     </header>

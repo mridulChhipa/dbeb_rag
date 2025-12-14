@@ -9,3 +9,4 @@ langchain-qdrant
 qdrant-client
 sentence-transformers
 pypdf
+python-multipart

@@ -1,9 +1,10 @@
 import os
 import uuid
 import asyncio
+import shutil
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, UploadFile, File, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -18,6 +19,8 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 import torch
 import nest_asyncio
@@ -162,6 +165,40 @@ async def stream(request: Request, thread_id: str | None = None, text: str | Non
             "X-Accel-Buffering": "no",  # disable buffering on some proxies
         },
     )
+
+@app.post("/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    x_admin_key: str = Header(..., alias="X-Admin-Key")
+):
+    admin_key = os.getenv("ADMIN_KEY", "secret-default")
+    if x_admin_key != admin_key:
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+
+    temp_file_path = f"temp_{uuid.uuid4()}.pdf"
+    try:
+        with open(temp_file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        loader = PyPDFLoader(temp_file_path)
+        docs = loader.load()
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=200)
+        splits = text_splitter.split_documents(docs)
+        
+        # Add to vectorstore
+        vectorstore.add_documents(splits)
+        
+        return {"message": f"Successfully processed {file.filename}", "chunks": len(splits)}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    finally:
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
 
 # Optional startup to warm graph
 @app.on_event("startup")
