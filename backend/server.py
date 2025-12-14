@@ -2,6 +2,7 @@ import os
 import uuid
 import asyncio
 import shutil
+import json
 from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request, UploadFile, File, Header, HTTPException
@@ -182,23 +183,50 @@ async def upload_file(
     try:
         with open(temp_file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-
-        loader = PyPDFLoader(temp_file_path)
-        docs = loader.load()
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=200)
-        splits = text_splitter.split_documents(docs)
-        
-        # Add to vectorstore
-        vectorstore.add_documents(splits)
-        
-        return {"message": f"Successfully processed {file.filename}", "chunks": len(splits)}
-    
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    
-    finally:
-        if os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+
+    async def process_stream():
+        try:
+            loader = PyPDFLoader(temp_file_path)
+            # Run heavy loading in thread pool
+            docs = await asyncio.to_thread(loader.load)
+            
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=200)
+            splits = text_splitter.split_documents(docs)
+            
+            total_chunks = len(splits)
+            yield f"event: init\ndata: {json.dumps({'total': total_chunks})}\n\n".encode("utf-8")
+            
+            batch_size = 20
+            for i in range(0, total_chunks, batch_size):
+                batch = splits[i:i+batch_size]
+                # Run vector store addition in thread pool to avoid blocking
+                await asyncio.to_thread(vectorstore.add_documents, batch)
+                
+                current = min(i + batch_size, total_chunks)
+                yield f"event: progress\ndata: {json.dumps({'current': current, 'total': total_chunks})}\n\n".encode("utf-8")
+                # Yield control to event loop
+                await asyncio.sleep(0.01)
+            
+            yield f"event: done\ndata: {json.dumps({'message': f'Successfully processed {file.filename}'})}\n\n".encode("utf-8")
+        
+        except Exception as e:
+            yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n".encode("utf-8")
+        
+        finally:
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+
+    return StreamingResponse(
+        process_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 # Optional startup to warm graph
 @app.on_event("startup")

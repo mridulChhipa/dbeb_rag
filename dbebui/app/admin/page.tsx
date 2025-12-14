@@ -12,6 +12,8 @@ export default function AdminPage() {
   const [status, setStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [ingestProgress, setIngestProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -46,7 +48,7 @@ export default function AdminPage() {
     }
   };
 
-  const handleUpload = async () => {
+  const handleUpload = () => {
     if (!file || !adminKey) {
       setMessage("Please provide both Admin Key and a file.");
       setStatus("error");
@@ -55,36 +57,95 @@ export default function AdminPage() {
 
     setStatus("uploading");
     setMessage("");
+    setUploadProgress(0);
+    setIngestProgress(0);
 
     const formData = new FormData();
     formData.append("file", file);
 
-    try {
-      const res = await fetch("http://127.0.0.1:8000/upload", {
-        method: "POST",
-        headers: {
-          "X-Admin-Key": adminKey,
-        },
-        body: formData,
-      });
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "http://127.0.0.1:8000/upload");
+    xhr.setRequestHeader("X-Admin-Key", adminKey);
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.detail || "Upload failed");
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const percentComplete = (event.loaded / event.total) * 100;
+        setUploadProgress(percentComplete);
       }
+    };
 
-      const data = await res.json();
-      setMessage(data.message || "Upload successful!");
-      setStatus("success");
-      setFile(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
+    let lastProcessedIndex = 0;
+
+    xhr.onprogress = () => {
+      const response = xhr.responseText;
+      const newContent = response.substring(lastProcessedIndex);
+      
+      if (!newContent) return;
+
+      const lines = newContent.split("\n\n");
+      
+      // We might have a partial line at the end, so we should be careful.
+      // But for simplicity, let's assume chunks come in full events or we just parse what we can.
+      // A more robust parser would buffer partial lines.
+      
+      for (const line of lines) {
+        if (line.startsWith("event: progress")) {
+          const dataLine = line.split("\n").find(l => l.startsWith("data: "));
+          if (dataLine) {
+            try {
+              const data = JSON.parse(dataLine.substring(6));
+              if (data.total > 0) {
+                const percent = (data.current / data.total) * 100;
+                setIngestProgress(percent);
+              }
+            } catch (e) {
+              console.error("Error parsing progress data", e);
+            }
+          }
+        } else if (line.startsWith("event: done")) {
+           setIngestProgress(100);
+           setStatus("success");
+           setMessage("Upload and ingestion successful!");
+           setFile(null);
+           if (fileInputRef.current) fileInputRef.current.value = "";
+        } else if (line.startsWith("event: error")) {
+           const dataLine = line.split("\n").find(l => l.startsWith("data: "));
+           if (dataLine) {
+             try {
+                const data = JSON.parse(dataLine.substring(6));
+                setMessage(data.detail || "An error occurred");
+             } catch {
+                setMessage("An error occurred");
+             }
+           }
+           setStatus("error");
+        }
       }
-    } catch (error: any) {
-      console.error(error);
-      setMessage(error.message || "An error occurred.");
+      
+      lastProcessedIndex = response.length;
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        // Success is handled in onprogress via 'event: done'
+        // But if the connection closes without 'done', we might want to check.
+      } else {
+        try {
+            const errorData = JSON.parse(xhr.responseText);
+            setMessage(errorData.detail || "Upload failed");
+        } catch {
+            setMessage("Upload failed");
+        }
+        setStatus("error");
+      }
+    };
+
+    xhr.onerror = () => {
+      setMessage("Network error occurred.");
       setStatus("error");
-    }
+    };
+
+    xhr.send(formData);
   };
 
   return (
@@ -186,7 +247,37 @@ export default function AdminPage() {
               {status === "uploading" ? "Uploading..." : "Upload & Ingest"}
             </Button>
 
-            {message && (
+            {status === "uploading" && (
+              <div className="space-y-4 pt-2">
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
+                    <span>Uploading File...</span>
+                    <span>{Math.round(uploadProgress)}%</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                    <div
+                      className="h-full bg-zinc-900 dark:bg-zinc-50 transition-all duration-300 ease-out"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
+                    <span>Processing & Ingesting...</span>
+                    <span>{Math.round(ingestProgress)}%</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                    <div
+                      className="h-full bg-zinc-900 dark:bg-zinc-50 transition-all duration-300 ease-out"
+                      style={{ width: `${ingestProgress}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {message && status !== "uploading" && (
               <div
                 className={`p-4 rounded-md text-sm font-medium ${
                   status === "success"
