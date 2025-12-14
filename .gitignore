@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+.env
+*.env
+.ipynb
+*.ipynb
+
+# Node.js / Next.js
+node_modules/
+.next/
+out/
+build/
+dist/
+.DS_Store
+coverage/
+
+# Data & Logs
+*.log
+*.sqlite
+*.sqlite3
+*.db
+*.pdf
+*.docx
+*.txt
+pdfs/
+Dataset_Extractor/dataset.txt
+
+# Environment & Secrets
+.env
+*.env
+backend/.env
+dbebui/.env.local
+dbebui/.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/

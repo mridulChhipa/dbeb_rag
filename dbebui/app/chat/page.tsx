@@ -1,0 +1,199 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+
+type Msg = { role: "user" | "assistant"; content: string };
+
+export default function ChatPage() {
+    const [threadId, setThreadId] = useState<string | null>(null);
+    const [input, setInput] = useState("");
+    const [messages, setMessages] = useState<Array<Msg>>([]);
+    const [loading, setLoading] = useState(false);
+    const eventSourceRef = useRef<EventSource | null>(null);
+    const bottomRef = useRef<HTMLDivElement | null>(null);
+    const [suggestions] = useState<string[]>([
+        "Summarize this document",
+        "Explain key points",
+        "Where is X mentioned?",
+        "Give me references",
+    ]);
+
+    const startStream = (tid: string, text: string) => {
+        if (eventSourceRef.current) {
+            eventSourceRef.current.close();
+            eventSourceRef.current = null;
+        }
+        const url = new URL("http://127.0.0.1:8000/stream");
+        url.searchParams.set("thread_id", tid);
+        url.searchParams.set("text", text);
+        const es = new EventSource(url.toString());
+        eventSourceRef.current = es;
+        es.addEventListener("token", (e) => {
+            const data = (e as MessageEvent).data as string;
+            setMessages((prev) => {
+                const copy = [...prev];
+                const idx = copy.length - 1;
+                if (idx >= 0 && copy[idx].role === "assistant") {
+                    copy[idx] = { role: "assistant", content: copy[idx].content + data };
+                }
+                return copy;
+            });
+        });
+        es.addEventListener("done", () => {
+            setLoading(false);
+            es.close();
+            eventSourceRef.current = null;
+        });
+        es.onerror = (e) => {
+            console.error("SSE network error", e);
+            setLoading(false);
+            es.close();
+            eventSourceRef.current = null;
+        };
+        es.addEventListener("sse-error", (e) => {
+            const data = (e as MessageEvent).data as string;
+            console.error("SSE server error:", data);
+            setLoading(false);
+            es.close();
+            eventSourceRef.current = null;
+        });
+    };
+
+    const sendMessage = () => {
+        if (!input.trim()) return;
+        const text = input.trim();
+        setInput("");
+        setLoading(true);
+        const tid = threadId ?? crypto.randomUUID();
+        setThreadId(tid);
+        setMessages((prev) => [...prev, { role: "user", content: text }, { role: "assistant", content: "" }]);
+        startStream(tid, text);
+    };
+
+    useEffect(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [messages]);
+
+    useEffect(() => {
+        return () => {
+            if (eventSourceRef.current) {
+                eventSourceRef.current.close();
+            }
+        };
+    }, []);
+
+    return (
+        <div className="flex flex-col h-screen bg-white text-gray-900 font-sans">
+            {/* Header */}
+            <header className="flex-none px-6 py-4 flex items-center justify-between border-b border-gray-100 bg-white/80 backdrop-blur-md sticky top-0 z-20">
+                <div className="flex items-center gap-2 cursor-pointer">
+                    <span className="text-xl font-medium text-gray-700 tracking-tight">DBEB</span>
+                    <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">Gemini 2.5 Flash</span>
+                </div>
+                <div className="text-xs text-gray-400 font-mono">
+                    {threadId ? `Session: ${threadId.slice(0, 8)}...` : "New Session"}
+                </div>
+            </header>
+
+            {/* Chat Area */}
+            <main className="flex-1 overflow-y-auto scroll-smooth">
+                <div className="max-w-3xl mx-auto px-4 py-8 min-h-full flex flex-col">
+                    
+                    {/* Welcome / Empty State */}
+                    {messages.length === 0 && (
+                        <div className="flex-1 flex flex-col items-center justify-center text-center space-y-8 opacity-0 animate-in fade-in duration-700 fill-mode-forwards" style={{ animationDelay: '0.1s' }}>
+                            <div className="space-y-2">
+                                <h1 className="text-4xl md:text-5xl font-medium bg-gradient-to-r from-blue-600 via-purple-500 to-red-500 bg-clip-text text-transparent pb-1">
+                                    Hello, Human.
+                                </h1>
+                                <p className="text-xl text-gray-400 font-light">How can I help you with your documents today?</p>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl">
+                                {suggestions.map((s, i) => (
+                                    <button
+                                        key={i}
+                                        onClick={() => {
+                                            setInput(s);
+                                            setTimeout(() => sendMessage(), 0);
+                                        }}
+                                        className="text-left p-4 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200 group"
+                                    >
+                                        <p className="text-sm font-medium text-gray-700 group-hover:text-gray-900">{s}</p>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Message List */}
+                    <div className="space-y-8 pb-4">
+                        {messages.map((m, i) => (
+                            <div key={i} className={`flex gap-4 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                                
+                                {/* Assistant Avatar */}
+                                {m.role === "assistant" && (
+                                    <div className="flex-none size-8 rounded-full bg-gradient-to-tr from-blue-500 to-red-500 flex items-center justify-center text-white shadow-sm mt-1">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 12 2.1 12a10.1 10.1 0 0 0 19.8 0"/></svg>
+                                    </div>
+                                )}
+
+                                {/* Message Content */}
+                                <div className={`max-w-[85%] md:max-w-[75%] ${m.role === "user" ? "bg-[#f0f4f9] rounded-3xl rounded-tr-sm px-5 py-3.5" : "pt-1"}`}>
+                                    <div className={`text-[15px] leading-7 whitespace-pre-wrap ${m.role === "user" ? "text-gray-800" : "text-gray-800"}`}>
+                                        {m.content}
+                                        {m.role === "assistant" && m.content === "" && loading && (
+                                            <span className="inline-block w-2 h-4 ml-1 bg-gray-400 animate-pulse rounded"/>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                        <div ref={bottomRef} />
+                    </div>
+                </div>
+            </main>
+
+            {/* Input Area */}
+            <footer className="flex-none bg-white p-4 pb-6">
+                <div className="max-w-3xl mx-auto relative">
+                    <div className={`bg-[#f0f4f9] rounded-3xl flex items-end p-2 transition-shadow ${loading ? 'opacity-80' : 'hover:shadow-md'}`}>
+                        <textarea
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                    e.preventDefault();
+                                    sendMessage();
+                                }
+                            }}
+                            placeholder="Ask anything..."
+                            className="flex-1 bg-transparent border-none focus:ring-0 resize-none max-h-32 min-h-[48px] py-3 px-4 text-gray-800 placeholder-gray-500 outline-none"
+                            rows={1}
+                            style={{ height: 'auto', overflow: 'hidden' }}
+                            onInput={(e) => {
+                                const target = e.target as HTMLTextAreaElement;
+                                target.style.height = 'auto';
+                                target.style.height = `${Math.min(target.scrollHeight, 128)}px`;
+                            }}
+                        />
+                        <button
+                            onClick={sendMessage}
+                            disabled={loading || !input.trim()}
+                            className="flex-none p-2.5 mb-1 mr-1 rounded-full bg-white text-gray-600 hover:text-blue-600 hover:bg-blue-50 disabled:opacity-50 disabled:hover:bg-white disabled:hover:text-gray-400 transition-all shadow-sm"
+                        >
+                            {loading ? (
+                                <div className="size-5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+                            ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
+                            )}
+                        </button>
+                    </div>
+                    <div className="text-center mt-2">
+                        <p className="text-xs text-gray-400">Gemini can make mistakes, so double-check it.</p>
+                    </div>
+                </div>
+            </footer>
+        </div>
+    );
+}
