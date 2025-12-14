@@ -1,19 +1,48 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Navbar } from "@/components/navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { UploadCloud, FileText, X } from "lucide-react";
 
 export default function AdminPage() {
   const [adminKey, setAdminKey] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const droppedFile = e.dataTransfer.files[0];
+      if (droppedFile.type === "application/pdf") {
+        setFile(droppedFile);
+        setMessage("");
+        setStatus("idle");
+      } else {
+        setMessage("Please upload a PDF file.");
+        setStatus("error");
+      }
     }
   };
 
@@ -48,7 +77,9 @@ export default function AdminPage() {
       setMessage(data.message || "Upload successful!");
       setStatus("success");
       setFile(null);
-      // Reset file input manually if needed, but state is null now
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     } catch (error: any) {
       console.error(error);
       setMessage(error.message || "An error occurred.");
@@ -73,7 +104,10 @@ export default function AdminPage() {
 
           <div className="space-y-6 bg-zinc-50 dark:bg-zinc-900 p-8 rounded-xl border border-zinc-200 dark:border-zinc-800">
             <div className="space-y-2">
-              <label htmlFor="admin-key" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+              <label
+                htmlFor="admin-key"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
                 Admin Key
               </label>
               <Input
@@ -86,16 +120,62 @@ export default function AdminPage() {
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="file-upload" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+              <label className="text-sm font-medium leading-none">
                 PDF Document
               </label>
-              <Input
-                id="file-upload"
-                type="file"
-                accept=".pdf"
-                onChange={handleFileChange}
-                className="cursor-pointer file:cursor-pointer"
-              />
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`relative flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
+                  isDragging
+                    ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                    : "border-zinc-300 bg-zinc-50 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-zinc-600 dark:hover:bg-zinc-700"
+                }`}
+              >
+                {file ? (
+                  <div className="flex flex-col items-center p-4 text-center">
+                    <FileText className="w-8 h-8 mb-2 text-blue-500" />
+                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate max-w-[200px]">
+                      {file.name}
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      {(file.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center pt-5 pb-6">
+                    <UploadCloud className={`w-8 h-8 mb-3 ${isDragging ? "text-blue-500" : "text-zinc-400"}`} />
+                    <p className="mb-2 text-sm text-zinc-500 dark:text-zinc-400">
+                      <span className="font-semibold">Click to upload</span> or drag and drop
+                    </p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      PDF (MAX. 10MB)
+                    </p>
+                  </div>
+                )}
+                <input
+                  ref={fileInputRef}
+                  id="file-upload"
+                  type="file"
+                  accept=".pdf"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+                {file && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                    className="absolute top-2 right-2 p-1 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors"
+                  >
+                    <X className="w-4 h-4 text-zinc-500" />
+                  </button>
+                )}
+              </div>
             </div>
 
             <Button
