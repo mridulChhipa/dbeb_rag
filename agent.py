@@ -1,8 +1,5 @@
 import os
-os.environ["GOOGLE_API_KEY"] = "AIzaSyCiVWSy3BADVAE9KdMbKqI_sTXXyTOVisY"
-os.environ["HF_HUB_ENABLE_SYMLINKS"] = "1"
-os.environ["GRPC_VERBOSITY"] = "ERROR"
-os.environ["GRPC_TRACE"] = ""
+os.environ["GOOGLE_API_KEY"] = "YOUR_API_KEY_HERE"
 
 import torch
 import logging
