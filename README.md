@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # DBEB
 
 Interactive RAG chatbot using a Python LangGraph agent and a Next.js UI.
@@ -45,4 +46,6 @@ Open `http://localhost:3000/chat` and start chatting.
 - `server.py` streams SSE events: `token`, `done`, `error`.
 - Ensure the `dbeb` Qdrant collection exists; ingestion scripts are under `Dataset_Extractor/`.
  - Backend reads environment from `backend/.env` (see `.env.example`).
+=======
+>>>>>>> cf09b724681b14f5fee62978d9478beacc347030
 # dbeb_rag

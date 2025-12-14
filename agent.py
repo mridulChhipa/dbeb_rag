@@ -1,5 +1,9 @@
 import os
+<<<<<<< HEAD
 os.environ["GOOGLE_API_KEY"] = "AIzaSyCiVWSy3BADVAE9KdMbKqI_sTXXyTOVisY"
+=======
+os.environ["GOOGLE_API_KEY"] = "AIzaSyCajA-t68BWLwRSrc3qolSBNRGw70xMnzo"
+>>>>>>> cf09b724681b14f5fee62978d9478beacc347030
 os.environ["HF_HUB_ENABLE_SYMLINKS"] = "1"
 os.environ["GRPC_VERBOSITY"] = "ERROR"
 os.environ["GRPC_TRACE"] = ""

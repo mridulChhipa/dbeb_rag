@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Python
 __pycache__/
 *.py[cod]
@@ -44,3 +45,10 @@ dbebui/.env
 
 # VS Code
 .vscode/
+=======
+*.pdf
+.ipynb_checkpoints/
+.ipynb
+.sqlite
+.db
+>>>>>>> cf09b724681b14f5fee62978d9478beacc347030
