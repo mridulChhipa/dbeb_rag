@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/navbar";
+import { extractText } from "unpdf";
+import mammoth from "mammoth";
+import ReactMarkdown from "react-markdown";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -11,8 +14,11 @@ export default function ChatPage() {
     const [input, setInput] = useState("");
     const [messages, setMessages] = useState<Array<Msg>>([]);
     const [loading, setLoading] = useState(false);
-    const eventSourceRef = useRef<EventSource | null>(null);
+    const abortControllerRef = useRef<AbortController | null>(null);
     const bottomRef = useRef<HTMLDivElement | null>(null);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const [documentContext, setDocumentContext] = useState<string>("");
+    const [uploadedFileName, setUploadedFileName] = useState<string>("");
     const [suggestions] = useState<string[]>([
         "Summarize this document",
         "Explain key points",
@@ -20,45 +26,112 @@ export default function ChatPage() {
         "Give me references",
     ]);
 
-    const startStream = (tid: string, text: string) => {
-        if (eventSourceRef.current) {
-            eventSourceRef.current.close();
-            eventSourceRef.current = null;
+    // Parse uploaded file based on extension
+    const parseFile = async (file: File): Promise<string> => {
+        const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+
+        if (ext === "pdf") {
+            const arrayBuffer = await file.arrayBuffer();
+            const { text } = await extractText(arrayBuffer);
+            return Array.isArray(text) ? text.join("\n").trim() : text;
+        } else if (ext === "docx") {
+            const arrayBuffer = await file.arrayBuffer();
+            const result = await mammoth.extractRawText({ arrayBuffer });
+            return result.value.trim();
+        } else {
+            // Treat all other files as plaintext
+            return await file.text();
         }
-        const url = new URL("http://127.0.0.1:8000/stream");
-        url.searchParams.set("thread_id", tid);
-        url.searchParams.set("text", text);
-        const es = new EventSource(url.toString());
-        eventSourceRef.current = es;
-        es.addEventListener("token", (e) => {
-            const data = (e as MessageEvent).data as string;
-            setMessages((prev) => {
-                const copy = [...prev];
-                const idx = copy.length - 1;
-                if (idx >= 0 && copy[idx].role === "assistant") {
-                    copy[idx] = { role: "assistant", content: copy[idx].content + data };
-                }
-                return copy;
+    };
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            const text = await parseFile(file);
+            setDocumentContext(text);
+            setUploadedFileName(file.name);
+        } catch (err) {
+            console.error("Failed to parse file:", err);
+            alert("Failed to parse file. Please try again.");
+        }
+        // Reset input so the same file can be selected again
+        e.target.value = "";
+    };
+
+    const clearDocument = () => {
+        setDocumentContext("");
+        setUploadedFileName("");
+    };
+
+    const startStream = async (tid: string, text: string) => {
+        // Abort any existing request
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        try {
+            const response = await fetch("http://127.0.0.1:8000/stream", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    thread_id: tid,
+                    text,
+                    context: documentContext || undefined,
+                }),
+                signal: controller.signal,
             });
-        });
-        es.addEventListener("done", () => {
+
+            if (!response.ok || !response.body) {
+                throw new Error("Stream failed");
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop() ?? "";
+
+                let eventType = "";
+                for (const line of lines) {
+                    if (line.startsWith("event: ")) {
+                        eventType = line.slice(7);
+                    } else if (line.startsWith("data: ")) {
+                        const data = line.slice(6);
+                        if (eventType === "token") {
+                            setMessages((prev) => {
+                                const copy = [...prev];
+                                const idx = copy.length - 1;
+                                if (idx >= 0 && copy[idx].role === "assistant") {
+                                    copy[idx] = { role: "assistant", content: copy[idx].content + data };
+                                }
+                                return copy;
+                            });
+                        } else if (eventType === "done") {
+                            setLoading(false);
+                        } else if (eventType === "sse-error") {
+                            console.error("SSE server error:", data);
+                            setLoading(false);
+                        }
+                    }
+                }
+            }
             setLoading(false);
-            es.close();
-            eventSourceRef.current = null;
-        });
-        es.onerror = (e) => {
-            console.error("SSE network error", e);
+        } catch (err) {
+            if ((err as Error).name !== "AbortError") {
+                console.error("Stream error:", err);
+            }
             setLoading(false);
-            es.close();
-            eventSourceRef.current = null;
-        };
-        es.addEventListener("sse-error", (e) => {
-            const data = (e as MessageEvent).data as string;
-            console.error("SSE server error:", data);
-            setLoading(false);
-            es.close();
-            eventSourceRef.current = null;
-        });
+        }
+        abortControllerRef.current = null;
     };
 
     const sendMessage = () => {
@@ -78,8 +151,8 @@ export default function ChatPage() {
 
     useEffect(() => {
         return () => {
-            if (eventSourceRef.current) {
-                eventSourceRef.current.close();
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
             }
         };
     }, []);
@@ -138,8 +211,12 @@ export default function ChatPage() {
                                 )}
 
                                 <div className={`max-w-[85%] md:max-w-[75%] ${m.role === "user" ? "bg-zinc-100 dark:bg-zinc-800 rounded-3xl rounded-tr-sm px-5 py-3.5" : "pt-1"}`}>
-                                    <div className={`text-[15px] leading-7 whitespace-pre-wrap ${m.role === "user" ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-800 dark:text-zinc-200"}`}>
-                                        {m.content}
+                                    <div className={`text-[15px] leading-7 ${m.role === "user" ? "text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap" : "text-zinc-800 dark:text-zinc-200 prose prose-zinc dark:prose-invert prose-sm max-w-none"}`}>
+                                        {m.role === "assistant" ? (
+                                            <ReactMarkdown>{m.content}</ReactMarkdown>
+                                        ) : (
+                                            m.content
+                                        )}
                                         {m.role === "assistant" && m.content === "" && loading && (
                                             <span className="inline-block w-2 h-4 ml-1 bg-zinc-400 animate-pulse rounded" />
                                         )}
@@ -154,7 +231,48 @@ export default function ChatPage() {
 
             <footer className="flex-none bg-background p-4 pb-6">
                 <div className="max-w-3xl mx-auto relative">
+                    {/* File indicator */}
+                    {uploadedFileName && (
+                        <div className="mb-2 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                            </svg>
+                            <span className="truncate max-w-xs">{uploadedFileName}</span>
+                            <button
+                                onClick={clearDocument}
+                                className="ml-1 p-0.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                                title="Remove document"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18" />
+                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
+                            </button>
+                        </div>
+                    )}
                     <div className={`bg-zinc-100 dark:bg-zinc-800 rounded-3xl flex items-end p-2 transition-shadow ${loading ? 'opacity-80' : 'hover:shadow-md'}`}>
+                        {/* Hidden file input */}
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleFileUpload}
+                            accept=".pdf,.docx,.txt,.md,.json,.csv,.xml,.html,.js,.ts,.py,.java,.c,.cpp,.h,.css,.yaml,.yml,.toml,.ini,.cfg,.log"
+                            className="hidden"
+                        />
+                        {/* Paperclip button */}
+                        <Button
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={loading}
+                            size="icon"
+                            variant="ghost"
+                            className="mb-1 ml-1 rounded-full text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                            title="Upload document"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                            </svg>
+                        </Button>
                         <textarea
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
@@ -164,7 +282,7 @@ export default function ChatPage() {
                                     sendMessage();
                                 }
                             }}
-                            placeholder="Ask anything..."
+                            placeholder={uploadedFileName ? "Ask about the uploaded document..." : "Ask anything..."}
                             className="flex-1 bg-transparent border-none focus:ring-0 resize-none max-h-32 min-h-[48px] py-3 px-4 text-zinc-800 dark:text-zinc-200 placeholder-zinc-500 dark:placeholder-zinc-400 outline-none"
                             rows={1}
                             style={{ height: 'auto', overflow: 'hidden' }}

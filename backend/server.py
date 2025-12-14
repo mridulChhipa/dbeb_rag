@@ -6,6 +6,7 @@ import json
 from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request, UploadFile, File, Header, HTTPException
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -67,6 +68,11 @@ llm_with_tools = llm.bind_tools([retriever_tool])
 class State(MessagesState):
     pass
 
+class StreamRequest(BaseModel):
+    thread_id: str | None = None
+    text: str
+    context: str | None = None
+
 # Build graph once at startup (without persistent checkpointer to avoid thread lifecycle issues)
 async def build_graph():
     workflow = StateGraph(State)
@@ -117,28 +123,35 @@ async def index():
         "status": "ok",
         "endpoints": [
             {"method": "GET", "path": "/health", "desc": "Service health"},
-            {"method": "GET", "path": "/stream?thread_id&text", "desc": "SSE token stream"},
+            {"method": "POST", "path": "/stream", "desc": "SSE token stream (JSON body: thread_id, text, context)"},
         ],
     }
 
-@app.get("/stream")
-async def stream(request: Request, thread_id: str | None = None, text: str | None = None) -> StreamingResponse:
-    if not text:
+@app.post("/stream")
+async def stream(request: Request, body: StreamRequest) -> StreamingResponse:
+    if not body.text:
         # Return 400-like SSE error
         async def err() -> AsyncGenerator[bytes, None]:
             yield b"event: sse-error\n"
-            yield b"data: Missing 'text' query parameter\n\n"
+            yield b"data: Missing 'text' field\n\n"
         return StreamingResponse(err(), media_type="text/event-stream")
 
+    thread_id = body.thread_id
     if thread_id is None or thread_id.strip() == "":
         thread_id = str(uuid.uuid4())
 
     config = {"configurable": {"thread_id": thread_id}}
     graph = await get_graph()
 
+    # Construct message with optional document context
+    if body.context:
+        full_content = f"Context from uploaded document:\n{body.context}\n\nUser question: {body.text}"
+    else:
+        full_content = body.text
+
     async def event_generator() -> AsyncGenerator[bytes, None]:
         try:
-            message = HumanMessage(content=text)
+            message = HumanMessage(content=full_content)
             async for event in graph.astream_events({"messages": [message]}, config, version="v2"):
                 # Client disconnect check
                 if await request.is_disconnected():
