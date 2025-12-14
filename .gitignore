@@ -44,3 +44,7 @@ dbebui/.env
 
 # VS Code
 .vscode/
+
+uv.lock
+qdrant_storage/
+dbebui/pnpm-lock.yaml

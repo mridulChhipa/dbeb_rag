@@ -10,3 +10,7 @@ qdrant-client
 sentence-transformers
 pypdf
 python-multipart
+fastapi
+uvicorn
+nest_asyncio
+langgraph-checkpoint-sqlite

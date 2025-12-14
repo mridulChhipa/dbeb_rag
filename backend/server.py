@@ -46,7 +46,8 @@ embeddings = HuggingFaceEmbeddings(
 )
 
 qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
-qdrant_client = QdrantClient(url=qdrant_url, prefer_grpc=False)
+api_key = os.getenv("QDRANT_API_KEY", "")
+qdrant_client = QdrantClient(url=qdrant_url, prefer_grpc=False, api_key=api_key)
 vectorstore = QdrantVectorStore(
     client=qdrant_client,
     collection_name="dbeb",
@@ -146,9 +147,19 @@ async def stream(request: Request, thread_id: str | None = None, text: str | Non
                 if kind == "on_chat_model_stream":
                     chunk = event["data"]["chunk"]
                     if isinstance(chunk, AIMessageChunk) and not chunk.tool_call_chunks:
-                        data = str(chunk.content)
-                        yield f"event: token\n".encode("utf-8")
-                        yield f"data: {data}\n\n".encode("utf-8")
+                        content = chunk.content
+                        # Handle Gemini's content block format: [{'type': 'text', 'text': '...'}]
+                        if isinstance(content, list):
+                            # Extract text from content blocks
+                            data = "".join(
+                                block.get("text", "") if isinstance(block, dict) else str(block)
+                                for block in content
+                            )
+                        else:
+                            data = str(content) if content else ""
+                        if data:  # Only yield if there's actual text content
+                            yield f"event: token\n".encode("utf-8")
+                            yield f"data: {data}\n\n".encode("utf-8")
             # done
             yield b"event: done\n"
             yield b"data: [DONE]\n\n"
