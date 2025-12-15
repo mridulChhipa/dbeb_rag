@@ -205,8 +205,10 @@ export default function ChatPage() {
                             <div key={i} className={`flex gap-4 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
 
                                 {m.role === "assistant" && (
-                                    <div className="flex-none size-8 rounded-full bg-gradient-to-tr from-blue-500 to-red-500 flex items-center justify-center text-white shadow-sm mt-1">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 10 10H12V2z" /><path d="M12 12 2.1 12a10.1 10.1 0 0 0 19.8 0" /></svg>
+                                    <div className={`flex-none size-8 rounded-full bg-gradient-to-tr from-blue-500 via-purple-500 to-red-500 flex items-center justify-center text-white shadow-sm mt-1 ${m.content === "" && loading ? "hidden" : ""}`}>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M12 2L15.09 8.91L22 12L15.09 15.09L12 22L8.91 15.09L2 12L8.91 8.91L12 2Z" />
+                                        </svg>
                                     </div>
                                 )}
 
@@ -218,7 +220,23 @@ export default function ChatPage() {
                                             m.content
                                         )}
                                         {m.role === "assistant" && m.content === "" && loading && (
-                                            <span className="inline-block w-2 h-4 ml-1 bg-zinc-400 animate-pulse rounded" />
+                                            <div className="py-2">
+                                                <div className="relative flex items-center justify-center w-8 h-8">
+                                                    <div className="absolute inset-0 rounded-full border-2 border-t-blue-500 border-r-purple-500 border-b-pink-500 border-l-transparent animate-spin" />
+                                                    <div className="animate-spin duration-[3s]">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="url(#gemini-loading-gradient)">
+                                                            <defs>
+                                                                <linearGradient id="gemini-loading-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                                    <stop offset="0%" stopColor="#3b82f6" />
+                                                                    <stop offset="50%" stopColor="#a855f7" />
+                                                                    <stop offset="100%" stopColor="#ec4899" />
+                                                                </linearGradient>
+                                                            </defs>
+                                                            <path d="M12 2L15.09 8.91L22 12L15.09 15.09L12 22L8.91 15.09L2 12L8.91 8.91L12 2Z" />
+                                                        </svg>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
