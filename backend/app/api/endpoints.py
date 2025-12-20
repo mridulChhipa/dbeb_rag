@@ -3,7 +3,11 @@ import uuid
 import json
 import shutil
 import asyncio
-from typing import AsyncGenerator
+import csv
+import tempfile
+import zipfile
+from pathlib import Path
+from typing import AsyncGenerator, Dict, List
 
 from fastapi import APIRouter, Request, UploadFile, File, Header, HTTPException, Form
 from fastapi.responses import StreamingResponse
@@ -15,6 +19,11 @@ from ..models import StreamRequest
 from ..core.config import settings
 from ..services.llm import get_graph, session_context
 from ..services.vector_store import get_global_vectorstore, add_session_documents
+from ..services.evaluator import (
+    extract_pdf_text,
+    read_text_file,
+    evaluate_candidate,
+)
 
 router = APIRouter()
 
@@ -176,3 +185,132 @@ async def upload_admin_file(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
+
+
+async def _load_text_from_path(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix == ".pdf":
+        return await extract_pdf_text(path)
+    if suffix in {".txt", ".md"}:
+        return await read_text_file(path)
+    raise HTTPException(status_code=400, detail=f"Unsupported criteria file type: {suffix}")
+
+
+async def _load_resume_text(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix == ".pdf":
+        return await extract_pdf_text(path)
+    if suffix in {".txt", ".md"}:
+        return await read_text_file(path)
+    raise HTTPException(status_code=400, detail=f"Unsupported resume file type: {suffix}")
+
+
+def _save_upload(upload: UploadFile, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with destination.open("wb") as buffer:
+        shutil.copyfileobj(upload.file, buffer)
+
+
+@router.post("/evaluate-candidates")
+async def evaluate_candidates(
+    criteria: UploadFile = File(...),
+    candidates_csv: UploadFile = File(...),
+    resumes_zip: UploadFile = File(...),
+):
+    """Evaluates each candidate against selection criteria using the LLM."""
+
+    temp_dir = Path(tempfile.mkdtemp(prefix="candidate_eval_"))
+    resumes_dir = temp_dir / "resumes"
+
+    criteria_path = temp_dir / (criteria.filename or "criteria")
+    csv_path = temp_dir / "candidates.csv"
+    resumes_archive_path = temp_dir / (resumes_zip.filename or "resumes.zip")
+
+    try:
+        _save_upload(criteria, criteria_path)
+        criteria.file.close()
+
+        _save_upload(candidates_csv, csv_path)
+        candidates_csv.file.close()
+
+        _save_upload(resumes_zip, resumes_archive_path)
+        resumes_zip.file.close()
+
+        if resumes_archive_path.suffix.lower() != ".zip":
+            raise HTTPException(status_code=400, detail="Resumes archive must be a .zip file")
+
+        with zipfile.ZipFile(resumes_archive_path, "r") as archive:
+            archive.extractall(resumes_dir)
+
+        criteria_text = await _load_text_from_path(criteria_path)
+
+        # Build resume lookup (case-insensitive)
+        resume_lookup: Dict[str, Path] = {}
+        for file_path in resumes_dir.rglob("*"):
+            if file_path.is_file():
+                resume_lookup[file_path.name.lower()] = file_path
+
+        with csv_path.open("r", encoding="utf-8-sig", newline="") as csv_file:
+            reader = csv.DictReader(csv_file)
+            if not reader.fieldnames:
+                raise HTTPException(status_code=400, detail="CSV file is empty or missing headers")
+            if "resume_filename" not in reader.fieldnames:
+                raise HTTPException(status_code=400, detail="CSV must include a 'resume_filename' column")
+
+            candidate_rows: List[Dict[str, str]] = list(reader)
+
+        if not candidate_rows:
+            raise HTTPException(status_code=400, detail="No candidate rows found in CSV")
+
+        results = []
+        for row in candidate_rows:
+            resume_name = (row.get("resume_filename") or "").strip()
+            candidate_id = row.get("candidate_id") or row.get("id") or row.get("name")
+
+            if not resume_name:
+                results.append({
+                    "candidate_id": candidate_id,
+                    "row": row,
+                    "error": "Missing resume_filename in CSV row"
+                })
+                continue
+
+            resume_path = resume_lookup.get(resume_name.lower())
+            if not resume_path or not resume_path.exists():
+                results.append({
+                    "candidate_id": candidate_id,
+                    "row": row,
+                    "error": f"Resume file '{resume_name}' not found in archive"
+                })
+                continue
+
+            try:
+                resume_text = await _load_resume_text(resume_path)
+                evaluation = await evaluate_candidate(criteria_text, row, resume_text)
+                results.append({
+                    "candidate_id": candidate_id,
+                    "resume_filename": resume_name,
+                    "row": row,
+                    "evaluation": evaluation,
+                })
+            except HTTPException as http_err:
+                results.append({
+                    "candidate_id": candidate_id,
+                    "row": row,
+                    "error": http_err.detail,
+                })
+            except Exception as exc:
+                results.append({
+                    "candidate_id": candidate_id,
+                    "row": row,
+                    "error": str(exc),
+                })
+
+        return {
+            "status": "ok",
+            "criteria_summary_chars": len(criteria_text),
+            "evaluated_candidates": results,
+        }
+
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
