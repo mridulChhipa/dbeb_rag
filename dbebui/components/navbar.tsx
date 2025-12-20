@@ -22,10 +22,13 @@ export function Navbar({ children, badge }: NavbarProps) {
                 {badge}
             </div>
             <nav className="flex items-center gap-4">
-                {children}
                 <Button asChild variant="ghost" size="sm">
-                    <Link href="/admin/evaluate">Candidate Evaluation</Link>
+                    <Link href="/">Home</Link>
                 </Button>
+                <Button asChild variant="ghost" size="sm">
+                    <Link href="/chat">Chat</Link>
+                </Button>
+                {children}
                 <Button asChild variant="ghost" size="icon" title="Admin">
                     <Link href="/admin">
                         <Settings className="h-5 w-5" />

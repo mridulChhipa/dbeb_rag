@@ -131,8 +131,8 @@ export default function CandidateEvaluationPage() {
         dragging: boolean,
         setDragging: (value: boolean) => void
     ) => (
-        <div className="space-y-2">
-            <label className="text-sm font-medium leading-none">{label}</label>
+        <div className="space-y-3">
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">{label}</label>
             <div
                 onClick={() => inputRef.current?.click()}
                 onDragOver={(event) => {
@@ -320,7 +320,35 @@ export default function CandidateEvaluationPage() {
                     </div>
 
                     <div className="space-y-6 bg-zinc-50 dark:bg-zinc-900 p-8 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                        <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-6">
+                            <div className="rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 p-6">
+                                <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Preparing your CSV</h2>
+                                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                                    The evaluator reads each row and combines it with the matching resume and your selection criteria. Required and optional fields:
+                                </p>
+                                <div className="mt-4 grid gap-3 md:grid-cols-2 text-sm">
+                                    <div className="rounded-lg bg-zinc-100/70 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 p-4">
+                                        <p className="font-medium text-zinc-800 dark:text-zinc-200">Required</p>
+                                        <ul className="mt-2 space-y-1 text-zinc-600 dark:text-zinc-400">
+                                            <li><span className="font-medium">resume_filename</span>: exact file name inside the ZIP (case-insensitive).</li>
+                                            <li><span className="font-medium">candidate_id</span> or <span className="font-medium">name</span>: used to label each result.</li>
+                                        </ul>
+                                    </div>
+                                    <div className="rounded-lg bg-zinc-100/70 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 p-4">
+                                        <p className="font-medium text-zinc-800 dark:text-zinc-200">Optional but helpful</p>
+                                        <ul className="mt-2 space-y-1 text-zinc-600 dark:text-zinc-400">
+                                            <li><span className="font-medium">email</span>, <span className="font-medium">phone</span>: appear in the JSON reasoning payload.</li>
+                                            <li><span className="font-medium">skills</span>, <span className="font-medium">experience_years</span>, or any custom columns: passed as-is to the LLM to strengthen context.</li>
+                                            <li><span className="font-medium">codeforces_rating</span>: if present, it will be echoed back alongside the inferred rating.</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-500">
+                                    Every additional column is serialized into JSON and shown in the raw response for auditing. Keep headers simple (letters, numbers, underscores) and prefer comma-separated values when listing multiple skills.
+                                </p>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-2">
                             {renderDropzone(
                                 "Selection Criteria (PDF or TXT)",
                                 "PDF, TXT, or Markdown",
@@ -355,6 +383,8 @@ export default function CandidateEvaluationPage() {
                                     setResumesDragging
                                 )}
                             </div>
+                            </div>
+
                         </div>
 
                         <div className="flex flex-wrap items-center gap-3">

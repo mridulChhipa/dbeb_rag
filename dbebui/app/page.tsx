@@ -5,11 +5,7 @@ import { Navbar } from "@/components/navbar";
 export default function Home() {
     return (
         <div className="flex min-h-screen flex-col bg-background text-foreground">
-            <Navbar>
-                <Button asChild variant="link" className="text-sm font-medium">
-                    <Link href="/chat">Chat</Link>
-                </Button>
-            </Navbar>
+            <Navbar />
 
             <main className="flex-1 flex flex-col items-center justify-center px-6 text-center">
                 <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight mb-6">

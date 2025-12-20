@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/navbar";
+import { MessageSquarePlus, UploadCloud, FileText, Sparkles, Plus, Mic, ArrowUp } from "lucide-react";
 import { extractText } from "unpdf";
 import mammoth from "mammoth";
 import ReactMarkdown from "react-markdown";
@@ -22,8 +23,8 @@ export default function ChatPage() {
     const [suggestions] = useState<string[]>([
         "Summarize this document",
         "Explain key points",
-        "Where is X mentioned?",
-        "Give me references",
+        "Draft a response",
+        "Find references",
     ]);
 
     // Parse uploaded file based on extension
@@ -175,15 +176,46 @@ export default function ChatPage() {
                 <div className="max-w-3xl mx-auto px-4 py-8 min-h-full flex flex-col">
 
                     {messages.length === 0 && (
-                        <div className="flex-1 flex flex-col items-center justify-center text-center space-y-8 opacity-0 animate-in fade-in duration-700 fill-mode-forwards" style={{ animationDelay: '0.1s' }}>
+                        <div className="flex-1 flex flex-col items-center justify-center text-center space-y-8" style={{ animationDelay: "0.1s" }}>
                             <div className="space-y-2">
-                                <h1 className="text-4xl md:text-5xl font-medium bg-gradient-to-r from-blue-600 via-purple-500 to-red-500 bg-clip-text text-transparent pb-1">
-                                    Hello, Human.
+                                <div className="flex items-center justify-center gap-2 text-2xl font-medium text-zinc-800 dark:text-zinc-200">
+                                    <Sparkles className="w-6 h-6 text-blue-500" />
+                                    <span>Hi there</span>
+                                </div>
+                                <h1 className="text-4xl md:text-5xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+                                    How can I help you today?
                                 </h1>
-                                <p className="text-xl text-zinc-400 dark:text-zinc-500 font-light">How can I help you with your documents today?</p>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl">
+                            <div className="w-full max-w-2xl relative">
+                                <div className="relative flex items-center w-full p-3 bg-zinc-100 dark:bg-zinc-800 rounded-[2rem] shadow-sm border border-transparent focus-within:border-zinc-300 dark:focus-within:border-zinc-700 transition-all">
+                                    <Button
+                                        onClick={() => fileInputRef.current?.click()}
+                                        variant="ghost"
+                                        size="icon"
+                                        className="rounded-full text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                                    >
+                                        <Plus className="w-5 h-5" />
+                                    </Button>
+                                    <input
+                                        value={input}
+                                        onChange={(e) => setInput(e.target.value)}
+                                        onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
+                                        placeholder="Ask DBEB RAG"
+                                        className="flex-1 bg-transparent border-none focus:ring-0 px-4 text-lg text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 outline-none"
+                                        autoFocus
+                                    />
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="rounded-full text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                                    >
+                                        <Mic className="w-5 h-5" />
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-wrap justify-center gap-3 w-full max-w-3xl">
                                 {suggestions.map((s, i) => (
                                     <button
                                         key={i}
@@ -191,9 +223,9 @@ export default function ChatPage() {
                                             setInput(s);
                                             setTimeout(() => sendMessage(), 0);
                                         }}
-                                        className="text-left p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 group"
+                                        className="px-5 py-2.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                                     >
-                                        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-zinc-100">{s}</p>
+                                        {s}
                                     </button>
                                 ))}
                             </div>
@@ -221,12 +253,32 @@ export default function ChatPage() {
                                         )}
                                         {m.role === "assistant" && m.content === "" && loading && (
                                             <div className="py-2">
-                                                <div className="relative flex items-center justify-center w-8 h-8">
-                                                    <div className="absolute inset-0 rounded-full border-2 border-t-blue-500 border-r-purple-500 border-b-pink-500 border-l-transparent animate-spin" />
-                                                    <div className="animate-spin duration-[3s]">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="url(#gemini-loading-gradient)">
+                                                <div className="relative flex items-center justify-center w-10 h-10">
+                                                    {/* Outer ring with dynamic arc */}
+                                                    <svg className="absolute inset-0 w-10 h-10" viewBox="0 0 40 40">
+                                                        <defs>
+                                                            <linearGradient id="arc-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                                <stop offset="0%" stopColor="#3b82f6" />
+                                                                <stop offset="50%" stopColor="#a855f7" />
+                                                                <stop offset="100%" stopColor="#ec4899" />
+                                                            </linearGradient>
+                                                        </defs>
+                                                        <circle
+                                                            cx="20"
+                                                            cy="20"
+                                                            r="16"
+                                                            fill="none"
+                                                            stroke="url(#arc-gradient)"
+                                                            strokeWidth="2.5"
+                                                            strokeLinecap="round"
+                                                            className="animate-arc-pulse"
+                                                        />
+                                                    </svg>
+                                                    {/* Inner sparkle rotating slowly */}
+                                                    <div className="animate-spin-slow">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="url(#gemini-inner-gradient)">
                                                             <defs>
-                                                                <linearGradient id="gemini-loading-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                                <linearGradient id="gemini-inner-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
                                                                     <stop offset="0%" stopColor="#3b82f6" />
                                                                     <stop offset="50%" stopColor="#a855f7" />
                                                                     <stop offset="100%" stopColor="#ec4899" />
@@ -248,99 +300,101 @@ export default function ChatPage() {
             </main>
 
             <footer className="flex-none bg-background p-4 pb-6">
-                <div className="max-w-3xl mx-auto relative">
-                    {/* File indicator */}
-                    {uploadedFileName && (
-                        <div className="mb-2 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <polyline points="14 2 14 8 20 8" />
-                            </svg>
-                            <span className="truncate max-w-xs">{uploadedFileName}</span>
-                            <button
-                                onClick={clearDocument}
-                                className="ml-1 p-0.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-                                title="Remove document"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="18" y1="6" x2="6" y2="18" />
-                                    <line x1="6" y1="6" x2="18" y2="18" />
+                {messages.length > 0 && (
+                    <div className="max-w-3xl mx-auto relative">
+                        {/* File indicator */}
+                        {uploadedFileName && (
+                            <div className="mb-2 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                    <polyline points="14 2 14 8 20 8" />
                                 </svg>
-                            </button>
-                        </div>
-                    )}
-                    <div className={`bg-zinc-100 dark:bg-zinc-800 rounded-3xl flex items-end p-2 transition-shadow ${loading ? 'opacity-80' : 'hover:shadow-md'}`}>
-                        {/* Hidden file input */}
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleFileUpload}
-                            accept=".pdf,.docx,.txt,.md,.json,.csv,.xml,.html,.js,.ts,.py,.java,.c,.cpp,.h,.css,.yaml,.yml,.toml,.ini,.cfg,.log"
-                            className="hidden"
-                        />
-                        {/* Paperclip button */}
-                        <Button
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={loading}
-                            size="icon"
-                            variant="ghost"
-                            className="mb-1 ml-1 rounded-full text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-                            title="Upload document"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                            </svg>
-                        </Button>
-                        <textarea
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter" && !e.shiftKey) {
-                                    e.preventDefault();
-                                    sendMessage();
-                                }
-                            }}
-                            placeholder={uploadedFileName ? "Ask about the uploaded document..." : "Ask anything..."}
-                            className="flex-1 bg-transparent border-none focus:ring-0 resize-none max-h-32 min-h-[48px] py-3 px-4 text-zinc-800 dark:text-zinc-200 placeholder-zinc-500 dark:placeholder-zinc-400 outline-none"
-                            rows={1}
-                            style={{ height: 'auto', overflow: 'hidden' }}
-                            onInput={(e) => {
-                                const target = e.target as HTMLTextAreaElement;
-                                target.style.height = 'auto';
-                                target.style.height = `${Math.min(target.scrollHeight, 128)}px`;
-                            }}
-                        />
-                        <Button
-                            onClick={sendMessage}
-                            disabled={loading || !input.trim()}
-                            size="icon"
-                            variant="ghost"
-                            className="mb-1 mr-1 rounded-full bg-background text-zinc-600 shadow-sm transition-all hover:bg-blue-50 hover:text-blue-600 disabled:opacity-50 disabled:hover:bg-background disabled:hover:text-zinc-400 dark:text-zinc-400 dark:hover:bg-blue-900/20"
-                        >
-                            {loading ? (
-                                <div className="size-5 animate-spin rounded-full border-2 border-zinc-300 border-t-blue-600 dark:border-zinc-600" />
-                            ) : (
-                                <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    width="20"
-                                    height="20"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
+                                <span className="truncate max-w-xs">{uploadedFileName}</span>
+                                <button
+                                    onClick={clearDocument}
+                                    className="ml-1 p-0.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                                    title="Remove document"
                                 >
-                                    <path d="m5 12 7-7 7 7" />
-                                    <path d="M12 19V5" />
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <line x1="18" y1="6" x2="6" y2="18" />
+                                        <line x1="6" y1="6" x2="18" y2="18" />
+                                    </svg>
+                                </button>
+                            </div>
+                        )}
+                        <div className={`bg-zinc-100 dark:bg-zinc-800 rounded-3xl flex items-end p-2 transition-shadow ${loading ? 'opacity-80' : 'hover:shadow-md'}`}>
+                            {/* Hidden file input */}
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleFileUpload}
+                                accept=".pdf,.docx,.txt,.md,.json,.csv,.xml,.html,.js,.ts,.py,.java,.c,.cpp,.h,.css,.yaml,.yml,.toml,.ini,.cfg,.log"
+                                className="hidden"
+                            />
+                            {/* Paperclip button */}
+                            <Button
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={loading}
+                                size="icon"
+                                variant="ghost"
+                                className="mb-1 ml-1 rounded-full text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                                title="Upload document"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
                                 </svg>
-                            )}
-                        </Button>
+                            </Button>
+                            <textarea
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" && !e.shiftKey) {
+                                        e.preventDefault();
+                                        sendMessage();
+                                    }
+                                }}
+                                placeholder={uploadedFileName ? "Ask about the uploaded document..." : "Ask anything..."}
+                                className="flex-1 bg-transparent border-none focus:ring-0 resize-none max-h-32 min-h-[48px] py-3 px-4 text-zinc-800 dark:text-zinc-200 placeholder-zinc-500 dark:placeholder-zinc-400 outline-none"
+                                rows={1}
+                                style={{ height: 'auto', overflow: 'hidden' }}
+                                onInput={(e) => {
+                                    const target = e.target as HTMLTextAreaElement;
+                                    target.style.height = 'auto';
+                                    target.style.height = `${Math.min(target.scrollHeight, 128)}px`;
+                                }}
+                            />
+                            <Button
+                                onClick={sendMessage}
+                                disabled={loading || !input.trim()}
+                                size="icon"
+                                variant="ghost"
+                                className="mb-1 mr-1 rounded-full bg-background text-zinc-600 shadow-sm transition-all hover:bg-blue-50 hover:text-blue-600 disabled:opacity-50 disabled:hover:bg-background disabled:hover:text-zinc-400 dark:text-zinc-400 dark:hover:bg-blue-900/20"
+                            >
+                                {loading ? (
+                                    <div className="size-5 animate-spin rounded-full border-2 border-zinc-300 border-t-blue-600 dark:border-zinc-600" />
+                                ) : (
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        width="20"
+                                        height="20"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                    >
+                                        <path d="m5 12 7-7 7 7" />
+                                        <path d="M12 19V5" />
+                                    </svg>
+                                )}
+                            </Button>
+                        </div>
+                        <div className="text-center mt-2">
+                            <p className="text-xs text-zinc-400 dark:text-zinc-500">Gemini can make mistakes, so double-check it.</p>
+                        </div>
                     </div>
-                    <div className="text-center mt-2">
-                        <p className="text-xs text-zinc-400 dark:text-zinc-500">Gemini can make mistakes, so double-check it.</p>
-                    </div>
-                </div>
+                )}
             </footer>
         </div>
     );

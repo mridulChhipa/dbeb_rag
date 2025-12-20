@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import Link from "next/link";
 import { Navbar } from "@/components/navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -151,7 +152,12 @@ export default function AdminPage() {
     return (
         <div className="flex min-h-screen flex-col bg-background text-foreground font-sans">
             <Navbar>
-                <div className="text-sm font-medium text-zinc-500">Admin Panel</div>
+                <div className="flex items-center gap-4">
+                    <div className="text-sm font-medium text-zinc-500">Admin Panel</div>
+                    <Button asChild variant="ghost" size="sm">
+                        <Link href="/admin/evaluate">Candidate Evaluation</Link>
+                    </Button>
+                </div>
             </Navbar>
 
             <main className="flex-1 flex flex-col items-center justify-center px-6 py-12">
