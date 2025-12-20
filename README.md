@@ -31,10 +31,6 @@ Interactive Retrieval-Augmented Generation (RAG) system built with a FastAPI + L
 
 ## Screenshots
 
-Add PNG files to `docs/screenshots/` to power the gallery below.
-
-## Screenshots
-
 | Home | RAG Demo | Candidate Pass | Candidate Fail |
 | --- | --- | --- | --- |
 | ![](docs/screenshots/Home.jpeg) | ![](docs/screenshots/RAG-Demo.jpeg) | ![](docs/screenshots/CandidatePass.jpeg) | ![](docs/screenshots/CandidateFail.jpeg) |
@@ -42,8 +38,6 @@ Add PNG files to `docs/screenshots/` to power the gallery below.
 | Evaluating | Upload UI | Session Uploads | RAG Pipeline |
 | --- | --- | --- | --- |
 | ![](docs/screenshots/Evaluating.jpeg) | ![](docs/screenshots/Upload-UI.jpeg) | ![](docs/screenshots/Session-File-Uploads.jpeg) | ![](docs/screenshots/RAG-Update-Pipeline.png) |
-
-> Tip: export browser screenshots at 1440px width for crisp results in the table above.
 
 ## Requirements
 - Python 3.10+
