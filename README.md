@@ -1,60 +1,73 @@
-# DBEB
+# DBEB Agent
 
-Interactive Retrieval-Augmented Generation (RAG) system built with a FastAPI + LangGraph backend and a Next.js 15 frontend.
-
-## Table of Contents
-- [Key Features](#key-features)
-- [Project Layout](#project-layout)
-- [Screenshots](#screenshots)
-- [Requirements](#requirements)
-- [Backend Setup](#backend-setup)
-- [API Endpoints](#api-endpoints)
-- [Candidate Evaluation Pipeline](#candidate-evaluation-pipeline)
-- [Frontend Setup](#frontend-setup)
-- [Additional Notes](#additional-notes)
+Unified AI Agent for document intelligence built with FastAPI + LangGraph backend and Next.js 15 frontend.
 
 ## Key Features
-- Retrieval-augmented chat with LangGraph orchestration and Gemini Flash responses.
-- Streaming document ingestion for both global and per-session knowledge bases backed by Qdrant.
-- Dedicated admin workflow for scoring candidate batches with LLM-backed reasoning and Codeforces rating extraction.
-- Minimalist Next.js UI with drag-and-drop uploaders, real-time progress bars, and dark mode support.
+
+- **Unified AI Agent**: Single chat interface that automatically routes to the right workflow based on your intent.
+- **Smart Intent Classification**: The agent understands whether you want to chat, ingest documents, or evaluate candidates.
+- **RAG-Powered Chat**: Retrieval-augmented responses using LangGraph orchestration and Gemini Flash.
+- **Document Ingestion**: Add PDFs to the permanent knowledge base through natural conversation.
+- **Candidate Evaluation**: Upload CSV + resumes ZIP and get automated screening with LLM-backed reasoning.
+- **Streaming Responses**: Real-time token streaming for all operations.
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Frontend (Next.js)                        │
+│                     Single Page AI Agent UI                      │
+└─────────────────────────────────────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    POST /agent (Unified Endpoint)                │
+├─────────────────────────────────────────────────────────────────┤
+│  1. Receive message + files                                      │
+│  2. Classify intent (heuristics + LLM fallback)                  │
+│  3. Route to handler:                                            │
+│     ├─ chat → RAG pipeline with LangGraph                        │
+│     ├─ ingest → Add documents to Qdrant                          │
+│     └─ evaluate → Batch candidate screening                      │
+│  4. Stream results back                                          │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ## Project Layout
-- `backend/app/`
-	- `main.py`: FastAPI entrypoint (`uvicorn backend.app.main:app`).
-	- `api/endpoints.py`: SSE chat stream, admin upload, session upload, and candidate evaluation routes.
-	- `services/`: LangGraph graphs, evaluator service, and Qdrant helpers.
-	- `core/config.py`: Environment loading (`backend/.env`).
-- `dbebui/`: Next.js UI (chat at `/chat`, admin upload at `/admin`, candidate evaluation at `/admin/evaluate`).
-- `Dataset_Extractor/`: Utilities for preparing source PDFs.
-- `agent.py`: CLI helper for the LangGraph workflow (optional).
 
-## Screenshots
+```
+backend/app/
+├── main.py                  # FastAPI entrypoint
+├── api/
+│   ├── agent_endpoint.py    # Unified /agent endpoint
+│   └── endpoints.py         # Legacy endpoints
+└── services/
+    ├── agent_router.py      # Intent classification
+    ├── llm.py               # LangGraph workflow
+    ├── evaluator.py         # Candidate evaluation
+    └── vector_store.py      # Qdrant integration
 
-| Home | RAG Demo | Candidate Pass | Candidate Fail |
-| --- | --- | --- | --- |
-| ![](docs/screenshots/Home.jpeg) | ![](docs/screenshots/RAG-Demo.jpeg) | ![](docs/screenshots/CandidatePass.jpeg) | ![](docs/screenshots/CandidateFail.jpeg) |
-
-| Evaluating | Upload UI | Session Uploads | RAG Pipeline |
-| --- | --- | --- | --- |
-| ![](docs/screenshots/Evaluating.jpeg) | ![](docs/screenshots/Upload-UI.jpeg) | ![](docs/screenshots/Session-File-Uploads.jpeg) | ![](docs/screenshots/RAG-Update-Pipeline.png) |
+dbebui/                      # Next.js single-page agent UI
+```
 
 ## Requirements
+
 - Python 3.10+
 - Node.js 18+
-- Qdrant instance (local or remote). The backend auto-creates collections `dbeb` and `dbeb_sessions` plus payload indexes when it starts.
-- Google Generative AI API key with access to Gemini Flash (`GOOGLE_API_KEY`).
+- Qdrant instance (local or remote)
+- Google Generative AI API key (`GOOGLE_API_KEY`)
 
 ## Backend Setup
-```bat
-cd d:\ARIES\DBEB_RAG\backend
+
+```bash
+cd backend
 python -m venv .venv
-.venv\Scripts\activate
-pip install -r ..\requirements.txt
+source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+pip install -r ../requirements.txt
 uvicorn backend.app.main:app --reload --port 8000
 ```
 
-Environment variables are read from `backend/.env`. Minimum keys:
+Environment variables in `backend/.env`:
 ```
 GOOGLE_API_KEY=...
 ADMIN_KEY=...
@@ -63,27 +76,51 @@ QDRANT_API_KEY=
 ```
 
 ## API Endpoints
-- `POST /stream` — Streams chat tokens (`event: token|done|sse-error`). Pass `thread_id` to reuse a session.
-- `POST /upload` — Admin-only PDF ingestion into the global knowledge base (`X-Admin-Key` header).
-- `POST /upload-session` — Uploads a PDF for the active chat session (form fields `file`, `thread_id`). Documents are stored in the temporary `dbeb_sessions` collection using metadata filters.
 
-## Candidate Evaluation Pipeline
-- `POST /evaluate-candidates` — Multipart form upload for batch screening. Provide:
-	- `criteria`: PDF, TXT, or Markdown describing minimum requirements.
-	- `candidates_csv`: CSV containing one row per candidate with a `resume_filename` column (and optional fields such as `candidate_id`, `name`, `email`, etc.).
-	- `resumes_zip`: ZIP archive containing the resume files referenced in the CSV. Supported resume formats: PDF, TXT, or Markdown.
-- Response: JSON array with each candidate’s pass/fail decision, extracted Codeforces rating, reasoning, and any missing criteria. The backend truncates long resumes automatically and includes the raw LLM payload for auditing.
+### Primary Endpoint
+
+**POST /agent** — Unified AI agent endpoint
+
+Form fields:
+- `message`: Your text prompt
+- `thread_id` (optional): Session ID for conversation continuity
+- `files` (optional): One or more file uploads
+
+The agent classifies your intent and routes to:
+- **chat**: RAG-powered Q&A
+- **ingest**: Add documents to knowledge base
+- **evaluate**: Batch candidate screening
+
+Response: Server-Sent Events stream with `intent`, `token`, `results`, `done` events.
+
+### Legacy Endpoints
+
+- `POST /stream` — Direct chat stream
+- `POST /upload` — Admin PDF ingestion (requires `X-Admin-Key` header)
+- `POST /evaluate-candidates` — Direct candidate evaluation
 
 ## Frontend Setup
-```bat
-cd d:\ARIES\DBEB_RAG\dbebui
+
+```bash
+cd dbebui
 npm install
 npm run dev
 ```
 
-Open `http://localhost:3000/chat` to use the chatbot, `http://localhost:3000/admin` for global uploads, and `http://localhost:3000/admin/evaluate` for candidate screening.
+Open `http://localhost:3000` to use the unified agent interface.
 
-## Additional Notes
-- The chat UI supports drag-and-drop PDF uploads; the frontend should call `/upload-session` with the current `thread_id` for per-session context.
-- Admin and evaluation forms surface dual progress bars: raw upload and downstream processing.
-- Console logging is enabled on the backend (`PROMPT TO LLM`, `AGENT NODE MESSAGES`) for debugging. Use environment variables to adjust logging verbosity or swap LLM providers as needed.
+## Usage
+
+### Chat / Q&A
+Just type your question. The agent will search the knowledge base and respond.
+
+### Ingest Documents
+Upload a PDF and say "Add this to the knowledge base" or "Ingest this document".
+
+### Evaluate Candidates
+Upload three files:
+1. **Criteria document** (PDF/TXT): Selection requirements
+2. **Candidates CSV**: Must include `resume_filename` column
+3. **Resumes ZIP**: Archive containing the resume files
+
+Then say "Evaluate these candidates" and the agent will process each one.

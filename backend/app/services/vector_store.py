@@ -16,7 +16,7 @@ embeddings = HuggingFaceEmbeddings(
 qdrant_client = QdrantClient(
     url=settings.QDRANT_URL, 
     prefer_grpc=False, 
-    api_key=settings.QDRANT_API_KEY,
+    api_key=settings.QDRANT_API_KEY if settings.QDRANT_API_KEY else None,
     check_compatibility=False
 )
 

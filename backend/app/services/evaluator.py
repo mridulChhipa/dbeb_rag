@@ -73,6 +73,17 @@ async def evaluate_candidate(criteria_text: str, candidate_row: Dict[str, Any], 
     else:
         content_text = str(content)
 
+    # Strip markdown code fences if present
+    content_text = content_text.strip()
+    if content_text.startswith("```"):
+        # Remove opening fence (```json or ```)
+        first_newline = content_text.find("\n")
+        if first_newline != -1:
+            content_text = content_text[first_newline + 1:]
+        # Remove closing fence
+        if content_text.endswith("```"):
+            content_text = content_text[:-3].strip()
+
     try:
         parsed = json.loads(content_text)
     except Exception:
